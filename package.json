@@ -1,5 +1,5 @@
 {
-  "name": "project_1",
+  "name": "my-block",
   "version": "1.0.0",
   "description": "This project creates a Blockchain application to store data into the blocks",
   "main": "index.js",
@@ -16,5 +16,8 @@
     "express": "^4.16.4",
     "hex2ascii": "0.0.3",
     "morgan": "^1.9.1"
+  },
+  "engines": {
+    "node": "10.22.1"
   }
 }
