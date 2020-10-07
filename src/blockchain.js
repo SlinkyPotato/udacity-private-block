@@ -34,7 +34,7 @@ class Blockchain {
      * Passing as a data `{data: 'Genesis Block'}`
      */
     async initializeChain() {
-        if( this.height === -1){
+        if(this.height === -1){
             let block = new BlockClass.Block({data: 'Genesis Block'});
             await this._addBlock(block);
         }
@@ -64,7 +64,21 @@ class Blockchain {
     _addBlock(block) {
         let self = this;
         return new Promise(async (resolve, reject) => {
-           
+            
+            if (self.height >= 0) {
+                let prevBlock = self.chain[self.chain.length - 1];
+                block.previousBlockHash = prevBlock.hash;
+            } else if (self.height < -1) {
+                reject("chain height invalid");
+            }
+
+            block.time = new Date().getTime().toString().slice(0,-3);
+            block.height = self.height + 1;
+            block.hash = SHA256(JSON.stringify(block)).toString();
+            this.chain.push(block);
+
+            self.height += 1;
+            resolve(block);
         });
     }
 
@@ -78,7 +92,7 @@ class Blockchain {
      */
     requestMessageOwnershipVerification(address) {
         return new Promise((resolve) => {
-            
+            resolve(`${address}:${new Date().getTime().toString().slice(0,-3)}:starRegistery`);
         });
     }
 
@@ -102,7 +116,21 @@ class Blockchain {
     submitStar(address, message, signature, star) {
         let self = this;
         return new Promise(async (resolve, reject) => {
-            
+            let timeSent = parseInt(message.split(':')[1]);
+            let currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+            if ((currentTime - timeSent) < (300)) { // less than 5 minutes
+                bitcoinMessage.verify(message, address, signature);
+                let block = new BlockClass.Block({
+                    "message": message,
+                    "address": address,
+                    "signature": signature,
+                    "star": star
+                });
+                self._addBlock(block);
+                resolve(block);
+            }
+
+            reject("more than 5 minutes elapsed");
         });
     }
 
@@ -115,7 +143,12 @@ class Blockchain {
     getBlockByHash(hash) {
         let self = this;
         return new Promise((resolve, reject) => {
-           
+           let block = self.chain.filter(b => b.hash == hash)[0];
+           if (block != null) {
+               resolve(block);
+           } else {
+               reject("block not found");
+           }
         });
     }
 
@@ -131,7 +164,7 @@ class Blockchain {
             if(block){
                 resolve(block);
             } else {
-                resolve(null);
+                resolve("block not found");
             }
         });
     }
@@ -146,7 +179,17 @@ class Blockchain {
         let self = this;
         let stars = [];
         return new Promise((resolve, reject) => {
-            
+            for (let i = 0; i < self.chain.length; i++) {
+                let block = self.chain[i];
+                block.getBData().then(blockData => {
+                    if (blockData && blockData.address == address) {
+                        stars.push(blockData.star);
+                    }
+                }).catch(e => {
+                    reject("block data retrieval failed");  
+                });
+            }
+            resolve(stars);
         });
     }
 
@@ -160,7 +203,24 @@ class Blockchain {
         let self = this;
         let errorLog = [];
         return new Promise(async (resolve, reject) => {
-            
+            for (let i = 0; i <= self.chain.height; i++) {
+                let block = self.chain[i];
+                if (!block.validate()) {
+                    errorLog += `block at height: ${i} corrupted`;
+                    continue;
+                }
+                if (i > 0) {
+                    let prevBlock = self.chain[i - 1];
+                    if (block.previousBlockHash == prevBlock.hash) {
+                        errorLog += `block at high: ${i} hash mismatch`;
+                    }
+                }
+            }
+            if (errorLog.length > 0) {
+                reject(errorLog);
+            } else {
+                resolve(errorLog);
+            }
         });
     }
 
